@@ -14,6 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+/**
+ * 解析MAC头部，判断MAC类型
+ */
 #include <ieee802-11/ofdm_parse_mac.h>
 #include "utils.h"
 
@@ -44,14 +47,16 @@ ofdm_parse_mac_impl(bool log, bool debug) :
 
 }
 
-void parse(pmt::pmt_t msg) {
-
-	if(pmt::is_eof_object(msg)) {
+void parse(pmt::pmt_t msg) 
+{
+	std::cout << "[ ofdm_parse_mac debug information ] : "<<std::endl;
+	if(pmt::is_eof_object(msg)) 
+	{
 		detail().get()->set_done(true);
 		return;
-	} else if(pmt::is_symbol(msg)) {
+	} 
+	else if(pmt::is_symbol(msg))
 		return;
-	}
 
 	msg = pmt::cdr(msg);
 
@@ -59,7 +64,6 @@ void parse(pmt::pmt_t msg) {
 	mac_header *h = (mac_header*)pmt::blob_data(msg);
 
 	mylog(boost::format("length: %1%") % data_len );
-
 	dout << std::endl << "new mac frame  (length " << data_len << ")" << std::endl;
 	dout << "=========================================" << std::endl;
 	if(data_len < 20) {
@@ -67,37 +71,49 @@ void parse(pmt::pmt_t msg) {
 		return;
 	}
 	#define HEX(a) std::hex << std::setfill('0') << std::setw(2) << int(a) << std::dec
-	dout << "duration: " << HEX(h->duration >> 8) << " " << HEX(h->duration  & 0xff) << std::endl;
-	dout << "frame control: " << HEX(h->frame_control >> 8) << " " << HEX(h->frame_control & 0xff);
+	dout << "duration(16进制): " << HEX(h->duration >> 8) << " " << HEX(h->duration  & 0xff) << std::endl;
+	dout << "frame control(16进制): " << HEX(h->frame_control >> 8) << " " << HEX(h->frame_control & 0xff);
 
-        switch((h->frame_control >> 2) & 3) {
+	//MAC帧类型只占两位
+    switch((h->frame_control >> 2) & 3)
+    {
 
 		case 0:
-			dout << " (MANAGEMENT)" << std::endl;
+			// dout << " (MANAGEMENT)" << std::endl;
+			dout << " 管理帧　" << std::endl;
 			parse_management((char*)h, data_len);
 			break;
 		case 1:
-			dout << " (CONTROL)" << std::endl;
+			// dout << " (CONTROL)" << std::endl;
+			dout << " 控制帧" << std::endl;
 			parse_control((char*)h, data_len);
 			break;
 
 		case 2:
-			dout << " (DATA)" << std::endl;
+			// dout << " (DATA)" << std::endl;
+			dout << " 数据帧" << std::endl;
 			parse_data((char*)h, data_len);
 			break;
 
 		default:
-			dout << " (unknown)" << std::endl;
+			dout << " 帧类型未知" << std::endl;
 			break;
 	}
 
 	char *frame = (char*)pmt::blob_data(msg);
 
 	// DATA
-	if((((h->frame_control) >> 2) & 63) == 2) {
+	if((((h->frame_control) >> 2) & 63) == 2)
+	{
+		//24 is the length of MAC header
+		dout << "从MAC帧数据域解出的数据为：　" << std::endl;
 		print_ascii(frame + 24, data_len - 24);
+		dout << "=========================================" << std::endl;
+		std::cout << std::endl;
+	}
 	// QoS Data
-	} else if((((h->frame_control) >> 2) & 63) == 34) {
+	else if((((h->frame_control) >> 2) & 63) == 34)
+	{
 		print_ascii(frame + 26, data_len - 26);
 	}
 }
@@ -106,7 +122,8 @@ void parse_management(char *buf, int length) {
 	mac_header* h = (mac_header*)buf;
 
 	if(length < 24) {
-		dout << "too short for a management frame" << std::endl;
+		// dout << "too short for a management frame" << std::endl;
+		dout << "管理帧太短" << std::endl;
 		return;
 	}
 
@@ -190,14 +207,16 @@ void parse_management(char *buf, int length) {
 void parse_data(char *buf, int length) {
 	mac_header* h = (mac_header*)buf;
 	if(length < 24) {
-		dout << "too short for a data frame" << std::endl;
+		// dout << "too short for a data frame" << std::endl;
+		dout << "数据帧太短" << std::endl;
 		return;
 	}
 
 	dout << "Subtype: ";
 	switch(((h->frame_control) >> 4) & 0xf) {
 		case 0:
-			dout << "Data";
+			// dout << "Data";
+			dout << "数据";
 			break;
 		case 1:
 			dout << "Data + CF-ACK";
@@ -264,7 +283,7 @@ void parse_data(char *buf, int length) {
 
 	// calculate frame error rate
 	float fer = lost_frames / (lost_frames + 1);
-	dout << "instantaneous fer: " << fer << std::endl;
+	dout << "瞬时帧错误率: " << fer << std::endl;
 
 	// keep track of values
 	d_last_seq_no = seq_no;
@@ -342,10 +361,15 @@ void print_mac_address(uint8_t *addr, bool new_line = false) {
 
 void print_ascii(char* buf, int length) {
 
-	for(int i = 0; i < length; i++) {
-		if((buf[i] > 31) && (buf[i] < 127)) {
+	for(int i = 0; i < length; i++)
+	{
+		//32-126是ASCII码中可显式的字符
+		if((buf[i] > 31) && (buf[i] < 127))
+		{
 			dout << buf[i];
-		} else {
+		}
+		else
+		{
 			dout << ".";
 		}
 	}
@@ -362,5 +386,3 @@ ofdm_parse_mac::sptr
 ofdm_parse_mac::make(bool log, bool debug) {
 	return gnuradio::get_initial_sptr(new ofdm_parse_mac_impl(log, debug));
 }
-
-

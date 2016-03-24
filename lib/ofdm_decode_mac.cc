@@ -14,6 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+/**
+ * 输入的是物理层数据域的complex信号，在该模块进行解调，解扰等操作
+ * 以消息的形式输出MAC　PDU，以二进制比特的形式．
+ */
 #include <ieee802-11/ofdm_decode_mac.h>
 
 #include "utils.h"
@@ -110,7 +114,7 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 		}
 
 		if(copied < d_tx.n_sym) {
-			dout << "copy one symbol, copied " << copied << " out of " << d_tx.n_sym << std::endl;
+			// dout << "copy one symbol, copied " << copied << " out of " << d_tx.n_sym << std::endl;
 			std::memcpy(sym + (copied * 48), in, 48 * sizeof(gr_complex));
 			copied++;
 
@@ -143,7 +147,8 @@ void decode() {
 	boost::crc_32_type result;
 	result.process_bytes(out_bytes + 2, d_tx.psdu_size);
 	if(result.checksum() != 558161692) {
-		dout << "checksum wrong -- dropping" << std::endl;
+		// dout << "checksum wrong -- dropping" << std::endl;
+		dout << "校验和错误　－－　丢弃MAC帧" << std::endl;
 		return;
 	}
 
@@ -287,17 +292,24 @@ void descramble () {
 void print_output() {
 
 	dout << std::endl;
-	for(int i = 0; i < decoded_bits.size() / 8; i++) {
+	dout << "解码出的MAC帧，包含MAC头24字节，数据域和循环冗余校验两个字节：" << std::endl;
+	dout << "16进制表示为：" << std::endl;
+	for(int i = 0; i < decoded_bits.size() / 8; i++)
+	{
 		dout << std::setfill('0') << std::setw(2) << std::hex << ((unsigned int)out_bytes[i] & 0xFF) << std::dec << " ";
-		if(i % 16 == 15) {
+		if(i % 16 == 15)
 			dout << std::endl;
-		}
 	}
 	dout << std::endl;
-	for(int i = 0; i < decoded_bits.size() / 8; i++) {
-		if((out_bytes[i] > 31) && (out_bytes[i] < 127)) {
+	dout << "字符形式表示为：" <<std::endl;
+	for(int i = 0; i < decoded_bits.size() / 8; i++)
+	{
+		if((out_bytes[i] > 31) && (out_bytes[i] < 127))
+		{
 			dout << ((char) out_bytes[i]);
-		} else {
+		}
+		else
+		{
 			dout << ".";
 		}
 	}
@@ -329,4 +341,3 @@ ofdm_decode_mac::sptr
 ofdm_decode_mac::make(bool log, bool debug) {
 	return gnuradio::get_initial_sptr(new ofdm_decode_mac_impl(log, debug));
 }
-

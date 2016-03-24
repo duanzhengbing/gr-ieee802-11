@@ -157,7 +157,7 @@ void generate_mac_data_frame(const char *msdu, int msdu_size, int *psdu_size) {
 	//compute and store fcs
 	boost::crc_32_type result;
 	result.process_bytes(d_psdu, msdu_size + 24);
-
+	//循环冗余校验码
 	uint32_t fcs = result.checksum();
 	memcpy(d_psdu + msdu_size + 24, &fcs, sizeof(uint32_t));
 }
@@ -179,4 +179,3 @@ ofdm_mac::sptr
 ofdm_mac::make(std::vector<uint8_t> src_mac, std::vector<uint8_t> dst_mac, std::vector<uint8_t> bss_mac) {
 	return gnuradio::get_initial_sptr(new ofdm_mac_impl(src_mac, dst_mac, bss_mac));
 }
-
