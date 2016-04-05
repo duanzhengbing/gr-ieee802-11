@@ -47,14 +47,15 @@ ofdm_parse_mac_impl(bool log, bool debug) :
 
 }
 
-void parse(pmt::pmt_t msg) 
+void parse(pmt::pmt_t msg)
 {
-	std::cout << "[ ofdm_parse_mac debug information ] : "<<std::endl;
-	if(pmt::is_eof_object(msg)) 
+	dout << "=========================================" << std::endl;
+	std::cout << "OFDM PARSE MAC : " << std::endl;
+	if(pmt::is_eof_object(msg))
 	{
 		detail().get()->set_done(true);
 		return;
-	} 
+	}
 	else if(pmt::is_symbol(msg))
 		return;
 
@@ -65,13 +66,12 @@ void parse(pmt::pmt_t msg)
 
 	mylog(boost::format("length: %1%") % data_len );
 	dout << std::endl << "new mac frame  (length " << data_len << ")" << std::endl;
-	dout << "=========================================" << std::endl;
-	if(data_len < 20) {
+	/*if(data_len < 20) {
 		dout << "frame too short to parse (<20)" << std::endl;
 		return;
-	}
+	}*/
 	#define HEX(a) std::hex << std::setfill('0') << std::setw(2) << int(a) << std::dec
-	dout << "duration(16进制): " << HEX(h->duration >> 8) << " " << HEX(h->duration  & 0xff) << std::endl;
+	dout << "duration(16进制): " << HEX(h->duration >> 8) << " " << HEX(h->duration & 0xff) << std::endl;
 	dout << "frame control(16进制): " << HEX(h->frame_control >> 8) << " " << HEX(h->frame_control & 0xff);
 
 	//MAC帧类型只占两位
@@ -103,26 +103,29 @@ void parse(pmt::pmt_t msg)
 	char *frame = (char*)pmt::blob_data(msg);
 
 	// DATA
-	if((((h->frame_control) >> 2) & 63) == 2)
+	if(((h->frame_control >> 2) & 3) == 2)
 	{
 		//24 is the length of MAC header
 		dout << "从MAC帧数据域解出的数据为：　" << std::endl;
 		print_ascii(frame + 24, data_len - 24);
-		dout << "=========================================" << std::endl;
-		std::cout << std::endl;
+		dout << "===================end====================" << std::endl;
+		dout << std::endl;
 	}
-	// QoS Data
-	else if((((h->frame_control) >> 2) & 63) == 34)
-	{
-		print_ascii(frame + 26, data_len - 26);
-	}
+	// QoS Data,must modify
+	// else if((((h->frame_control) >> 2) & 63) == 34)
+	// {
+	// 	dout << "从MAC帧数据域解出的数据为：　" << std::endl;
+	// 	print_ascii(frame + 24, data_len - 24);
+	// 	dout << "===================end====================" << std::endl;
+	// 	print_ascii(frame + 26, data_len - 26);
+	// }
 }
 
-void parse_management(char *buf, int length) {
+void parse_management(char *buf, int length)
+{
 	mac_header* h = (mac_header*)buf;
 
 	if(length < 24) {
-		// dout << "too short for a management frame" << std::endl;
 		dout << "管理帧太短" << std::endl;
 		return;
 	}
@@ -158,13 +161,27 @@ void parse_management(char *buf, int length) {
 			if(length < 38) {
 				return;
 			}
+			else
 			{
-			uint8_t* len = (uint8_t*) (buf + 24 + 13);
-			if(length < 38 + *len) {
-				return;
-			}
-			std::string s(buf + 24 + 14, *len);
-			dout << "SSID: " << s;
+				for(int i = 0; i < length; i++)
+				{
+					if((buf[i] > 31) && (buf[i] < 127))
+					{
+						std::cout << ((char) buf[i]);
+					}
+					else
+					{
+						std::cout << ".";
+					}
+				}
+				std::cout << std::endl;
+
+				char* len = (char*) (buf + 24 + 13);
+				std::cout << "len = " << (int)*len << std::endl;
+				if(length < 38 + *len)
+					return;
+				std::string s(buf + 24 + 14, *len);
+				dout << "SSID: " << s << std::endl;
 			}
 			break;
 		case 9:
@@ -207,7 +224,6 @@ void parse_management(char *buf, int length) {
 void parse_data(char *buf, int length) {
 	mac_header* h = (mac_header*)buf;
 	if(length < 24) {
-		// dout << "too short for a data frame" << std::endl;
 		dout << "数据帧太短" << std::endl;
 		return;
 	}

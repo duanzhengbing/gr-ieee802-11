@@ -31,6 +31,7 @@
 #include <boost/crc.hpp>
 #include <iostream>
 #include <stdexcept>
+#include <bitset>
 
 using namespace gr::ieee802_11;
 
@@ -86,33 +87,42 @@ void app_in (pmt::pmt_t msg) {
 	std::string  str;
 
 	if(pmt::is_eof_object(msg)) {
-		message_port_pub(pmt::mp("phy out"), pmt::PMT_EOF);
-		detail().get()->set_done(true);
+		// message_port_pub(pmt::mp("phy out"), pmt::PMT_EOF);
+		// detail().get()->set_done(true);
+		std::cout << "没有数据发送,send beacon" << std::endl;
+		send_beacon_frame();
 		return;
 
-	} else if(pmt::is_symbol(msg)) {
-
+	}
+	else if(pmt::is_symbol(msg))
+	{
 		str = pmt::symbol_to_string(msg);
 		msg_len = str.length();
 		msdu = str.data();
+		if(msg_len > 1500)
+			throw std::invalid_argument("Frame too large (> 1500)");
+		send_data_frame(msdu,msg_len);
 
-	} else if(pmt::is_pair(msg)) {
-
+	}
+	else if(pmt::is_pair(msg))
+	{
 		msg_len = pmt::blob_length(pmt::cdr(msg));
 		msdu = reinterpret_cast<const char *>(pmt::blob_data(pmt::cdr(msg)));
-
-	} else {
+		if(msg_len > 1500)
+			throw std::invalid_argument("Frame too large (> 1500)");
+		send_data_frame(msdu,msg_len);
+	}
+	else
+	{
 		throw std::invalid_argument("OFDM MAC expects PDUs or strings");
                 return;
 	}
-
-	if(msg_len > 1500) {
-		throw std::invalid_argument("Frame too large (> 1500)");
-	}
-
+}
+void send_data_frame(const char *msdu, int msdu_size)
+{
 	// make MAC frame
 	int    psdu_length;
-	generate_mac_data_frame(msdu, msg_len, &psdu_length);
+	generate_mac_data_frame(msdu, msdu_size, psdu_length);
 
 	// dict
 	pmt::pmt_t dict = pmt::make_dict();
@@ -124,8 +134,72 @@ void app_in (pmt::pmt_t msg) {
 	// pdu
 	message_port_pub(pmt::mp("phy out"), pmt::cons(dict, mac));
 }
+/**
+ * |--------------------|---------|------|------|--|---|--------|
+ * |<---MAC head(24)--->|<-时间戳->|信标间隔| 容量 |id|len|<-ssid->|
+ * 		24字节				8字节	2字节   2字节  1   1   0-32
+ */
+void send_beacon_frame()
+{
+	int psdu_length;
+	size_t       infor_unit_size = 22;
+	char   *infor_unit = new char[infor_unit_size];
+	std::memset(infor_unit,0,21);
+	const char* ssid = "tp_link";
+	char length = 7;
+	char unit_id = 0;
+	std::memcpy(infor_unit+12,&unit_id,1);//前12个字节包括时间戳(8字节)，信标帧间隔(2字节)和容量(2字节)
+	std::memcpy(infor_unit+13,&length,1);
+	std::memcpy(infor_unit+14,ssid,7);
 
-void generate_mac_data_frame(const char *msdu, int msdu_size, int *psdu_size) {
+	generate_mac_management_frame(infor_unit,infor_unit_size,psdu_length);
+	// dict
+	pmt::pmt_t dict = pmt::make_dict();
+	dict = pmt::dict_add(dict, pmt::mp("crc_included"), pmt::PMT_T);
+
+	// blob
+	pmt::pmt_t mac = pmt::make_blob(d_psdu, psdu_length);
+
+	// pdu
+	message_port_pub(pmt::mp("phy out"), pmt::cons(dict, mac));
+}
+void generate_mac_management_frame(const char *msdu, int msdu_size, int& psdu_size)
+{
+	mac_header header;
+	header.frame_control = 0x0080;
+	header.duration = 0x0000;
+
+	for(int i = 0; i < 6; i++) {
+		header.addr1[i] = d_dst_mac[i];
+		header.addr2[i] = d_src_mac[i];
+		header.addr3[i] = d_bss_mac[i];
+	}
+
+	header.seq_nr = 0;
+	for (int i = 0; i < 12; i++) {
+		if(d_seq_nr & (1 << i)) {
+			header.seq_nr |=  (1 << (i + 4));
+		}
+	}
+	header.seq_nr = htole16(header.seq_nr);
+	d_seq_nr++;
+
+	//header size is 24, plus 4 for FCS means 28 bytes
+	psdu_size = 28 + msdu_size;
+
+	//copy mac header into psdu
+	std::memcpy(d_psdu, &header, 24);
+	//copy msdu into psdu
+	memcpy(d_psdu + 24, msdu, msdu_size);
+	//compute and store fcs
+	boost::crc_32_type result;
+	result.process_bytes(d_psdu, msdu_size + 24);
+	//循环冗余校验码
+	uint32_t fcs = result.checksum();
+	memcpy(d_psdu + msdu_size + 24, &fcs, sizeof(uint32_t));
+}
+
+void generate_mac_data_frame(const char *msdu, int msdu_size, int& psdu_size) {
 
 	// mac header
 	mac_header header;
@@ -148,7 +222,7 @@ void generate_mac_data_frame(const char *msdu, int msdu_size, int *psdu_size) {
 	d_seq_nr++;
 
 	//header size is 24, plus 4 for FCS means 28 bytes
-	*psdu_size = 28 + msdu_size;
+	psdu_size = 28 + msdu_size;
 
 	//copy mac header into psdu
 	std::memcpy(d_psdu, &header, 24);

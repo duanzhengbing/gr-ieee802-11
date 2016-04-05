@@ -157,7 +157,7 @@ tx_param::tx_param(ofdm_param &ofdm, int psdu_length) {
 
 	psdu_size = psdu_length;
 
-	// number of symbols (17-11)
+	// number of symbols (17-11),16 bits of service,6 bits of padding
 	n_sym = (int) ceil((16 + 8 * psdu_size + 6) / (double) ofdm.n_dbps);
 
 	// number of bits of the data field (17-12)

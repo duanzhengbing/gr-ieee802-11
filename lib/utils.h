@@ -49,6 +49,19 @@ struct mac_header {
 	uint8_t addr3[6];
 	uint16_t seq_nr;
 }__attribute__((packed));
+struct ssid_unit
+{
+	uint8_t unit_id;
+	uint8_t length;
+	uint8_t SSID[32];
+}__attribute__((packed));
+struct beacon_info_unit 
+{
+	uint8_t timestamp[8];
+	uint16_t beacon_gap;
+	uint16_t capacity;
+	ssid_unit ssidu;
+}__attribute__((packed));
 
 /**
  * OFDM parameters
