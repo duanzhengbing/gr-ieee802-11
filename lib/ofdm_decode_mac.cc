@@ -79,7 +79,7 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 	std::vector<gr::tag_t> tags;
 	const uint64_t nread = this->nitems_read(0);
 
-	dout << "Decode MAC: input " << ninput_items[0] << std::endl;
+	// dout << "Decode MAC: input " << ninput_items[0] << std::endl;
 
 	while(i < ninput_items[0]) {
 
@@ -150,6 +150,10 @@ void decode() {
 		// dout << "checksum wrong -- dropping" << std::endl;
 		dout << "校验和错误　－－　丢弃MAC帧" << std::endl;
 		return;
+	}
+	else
+	{
+		dout << "校验和正确 - - " << std::endl;
 	}
 
 	mylog(boost::format("encoding: %1% - length: %2% - symbols: %3%")
@@ -292,7 +296,7 @@ void descramble () {
 void print_output() {
 
 	dout << std::endl;
-	dout << "解码出的MAC帧，包含MAC头24字节，数据域和循环冗余校验两个字节：" << std::endl;
+	dout << "解码出的MAC帧 ： < service | MAC header | psdu | FCS >" << std::endl;
 	dout << "16进制表示为：" << std::endl;
 	for(int i = 0; i < decoded_bits.size() / 8; i++)
 	{
