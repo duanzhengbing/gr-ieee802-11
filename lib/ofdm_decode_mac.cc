@@ -141,19 +141,19 @@ void decode() {
 	deinterleave();
 	decode_conv();
 	descramble();
-	print_output();
 
 	// skip service field
 	boost::crc_32_type result;
 	result.process_bytes(out_bytes + 2, d_tx.psdu_size);
-	if(result.checksum() != 558161692) {
-		// dout << "checksum wrong -- dropping" << std::endl;
+	if(result.checksum() != 558161692) 
+	{
 		dout << "校验和错误　－－　丢弃MAC帧" << std::endl;
 		return;
 	}
 	else
 	{
 		dout << "校验和正确 - - " << std::endl;
+		print_output();
 	}
 
 	mylog(boost::format("encoding: %1% - length: %2% - symbols: %3%")
@@ -252,7 +252,7 @@ void decode_conv() {
 	code.set_truncation_length(30);
 
 	dout << "coding rate " << code.get_rate() << std::endl;
-	dout << d_tx.n_encoded_bits << std::endl;
+	// dout << d_tx.n_encoded_bits << std::endl;
 
 	vec rx_signal(deinter, d_tx.n_encoded_bits);
 

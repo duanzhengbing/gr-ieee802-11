@@ -42,6 +42,7 @@ ofdm_decode_signal_impl(bool log, bool debug) : block("ofdm_decode_signal",
 ~ofdm_decode_signal_impl(){
 }
 
+/*每个item的大小为48*sizeof(gr_complex)，但是读指针却是每次读取一个gr_complex*/
 int general_work (int noutput_items, gr_vector_int& ninput_items,
 		gr_vector_const_void_star& input_items,
 		gr_vector_void_star& output_items) {
@@ -59,12 +60,14 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 		<< "  output " << noutput_items << std::endl;
 
 	while((i < ninput_items[0]) && (o < noutput_items)) {
-
+		/*相当于在一个item中即48*sizof(gr_complex)的范围内找tag*/
 		get_tags_in_range(tags, 0, nread + i, nread + i + 1,
 			pmt::string_to_symbol("ofdm_start"));
 
-		if(tags.size()) {
-			for(int n = 0; n < 48; n++) {
+		if(tags.size()) 
+		{
+			for(int n = 0; n < 48; n++) 
+			{
 				bits[n] = -real(in[n]);
 			}
 
@@ -72,7 +75,8 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 
 			decode();
 
-			if(print_signal()) {
+			if(print_signal()) 
+			{
 
 				add_item_tag(0, nitems_written(0) + o,
 					pmt::string_to_symbol("ofdm_start"),
@@ -81,7 +85,9 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 					pmt::string_to_symbol(name()));
 			}
 
-		} else if(d_copy_symbols) {
+		} 
+		else if(d_copy_symbols) 
+		{
 
 			std::memcpy(out, in, 48 * sizeof(gr_complex));
 			o++;
@@ -130,8 +136,10 @@ void decode() {
 
 	dout << "length rx " << rx_signal.size() << std::endl;
 	dout << rx_signal << std::endl;
-	dout << "length decoded " << decoded_bits.size() << std::endl;
-	dout << decoded_bits << std::endl;
+	// dout << "length decoded " << decoded_bits.size() << std::endl;
+	// std::cout << "length decoded " << decoded_bits.size() << std::endl;
+	// dout << decoded_bits << std::endl;
+	// std::cout << decoded_bits << std::endl;
 
 }
 
@@ -144,7 +152,8 @@ bool print_signal() {
 		parity ^= (bool)decoded_bits[i];
 
 		if((i < 4) && decoded_bits[i]) {
-			r = r | (1 << i);
+			// r = r | (1 << i);
+			r = r | (1 << (3-i));
 		}
 
 		if(decoded_bits[i] && (i > 4) && (i < 17)) {
@@ -153,39 +162,55 @@ bool print_signal() {
 	}
 
 	if(parity != (bool)decoded_bits[17]) {
-		dout << "SIGNAL: wrong parity" << std::endl;
+		// std::cout << "SIGNAL: wrong parity" << std::endl;
 		return false;
 	}
-
-	if(r == 11) {
+	// std::cout << "SIGNAL : r =  " << r << std::endl;
+	// if(r == 11) 
+	if(r == 13) 
+	{
 		d_encoding = 0;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 24);
 		dout << "Encoding: 3 Mbit/s   ";
-	} else if(r == 15) {
+	} 
+	else if(r == 15) 
+	{
 		d_encoding = 1;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 36);
 		dout << "Encoding: 4.5 Mbit/s   ";
-	} else if(r == 10) {
+	} 
+	else if(r == 5) 
+	{
 		d_encoding = 2;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 48);
 		dout << "Encoding: 6 Mbit/s   ";
-	} else if(r == 14) {
+	} 
+	else if(r == 7) 
+	{
 		d_encoding = 3;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 72);
 		dout << "Encoding: 9 Mbit/s   ";
-	} else if(r ==  9) {
+	} 
+	else if(r ==  9) 
+	{
 		d_encoding = 4;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 96);
 		dout << "Encoding: 12 Mbit/s   ";
-	} else if(r == 13) {
+	} 
+	else if(r == 11) 
+	{
 		d_encoding = 5;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 144);
 		dout << "Encoding: 18 Mbit/s   ";
-	} else if(r ==  8) {
+	} 
+	else if(r ==  1) 
+	{
 		d_encoding = 6;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 192);
 		dout << "Encoding: 24 Mbit/s   ";
-	} else if(r ==  12) {
+	} 
+	else if(r ==  3) 
+	{
 		d_encoding = 7;
 		d_copy_symbols = (int) ceil((16 + 8 * d_len + 6) / (double) 216);
 		dout << "Encoding: 27 Mbit/s   ";

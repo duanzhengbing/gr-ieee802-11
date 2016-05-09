@@ -50,7 +50,7 @@ ofdm_parse_mac_impl(bool log, bool debug) :
 void parse(pmt::pmt_t msg)
 {
 	dout << "=========================================" << std::endl;
-	std::cout << "OFDM PARSE MAC : " << std::endl;
+	dout << "OFDM PARSE MAC : " << std::endl;
 	if(pmt::is_eof_object(msg))
 	{
 		detail().get()->set_done(true);
@@ -79,18 +79,15 @@ void parse(pmt::pmt_t msg)
     {
 
 		case 0:
-			// dout << " (MANAGEMENT)" << std::endl;
 			dout << " 管理帧　" << std::endl;
 			parse_management((char*)h, data_len);
 			break;
 		case 1:
-			// dout << " (CONTROL)" << std::endl;
 			dout << " 控制帧" << std::endl;
 			parse_control((char*)h, data_len);
 			break;
 
 		case 2:
-			// dout << " (DATA)" << std::endl;
 			dout << " 数据帧" << std::endl;
 			parse_data((char*)h, data_len);
 			break;
@@ -231,7 +228,6 @@ void parse_data(char *buf, int length) {
 	dout << "Subtype: ";
 	switch(((h->frame_control) >> 4) & 0xf) {
 		case 0:
-			// dout << "Data";
 			dout << "数据";
 			break;
 		case 1:
