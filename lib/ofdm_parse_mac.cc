@@ -66,6 +66,7 @@ void parse(pmt::pmt_t msg)
 
 	mylog(boost::format("length: %1%") % data_len );
 	dout << std::endl << "new mac frame  (length " << data_len << ")" << std::endl;
+	//过滤了CTS和RTS等短帧
 	/*if(data_len < 20) {
 		dout << "frame too short to parse (<20)" << std::endl;
 		return;

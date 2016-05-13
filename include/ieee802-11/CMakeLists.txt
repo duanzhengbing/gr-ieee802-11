@@ -80,6 +80,7 @@ list(APPEND include_sources
     ofdm_sync_long.h
     ofdm_sync_short.h
     wifi_signal_field.h
+    common.h
 )
 
 install(

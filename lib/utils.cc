@@ -264,7 +264,7 @@ void interleave(const char *in, char *out, tx_param &tx, ofdm_param &ofdm, bool 
 	int n_cbps = ofdm.n_cbps;
 	int first[n_cbps];
 	int second[n_cbps];
-	int s = std::max(ofdm.n_bpsc / 2, 1);
+	int s = std::max(ofdm.n_bpsc >> 1, 1);
 
 	for(int j = 0; j < n_cbps; j++) {
 		first[j] = s * (j / s) + ((j + int(floor(16.0 * j / n_cbps))) % s);
@@ -291,7 +291,7 @@ void interleave(const double *in, double *out, tx_param &tx, ofdm_param &ofdm, b
 	int n_cbps = ofdm.n_cbps;
 	int first[n_cbps];
 	int second[n_cbps];
-	int s = std::max(ofdm.n_bpsc / 2, 1);
+	int s = std::max(ofdm.n_bpsc >> 1, 1);
 
 	for(int j = 0; j < n_cbps; j++) {
 		first[j] = s * (j / s) + ((j + int(floor(16.0 * j / n_cbps))) % s);

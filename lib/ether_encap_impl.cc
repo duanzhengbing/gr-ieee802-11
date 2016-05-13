@@ -60,25 +60,35 @@ ether_encap_impl::from_wifi(pmt::pmt_t msg) {
 		return;
 	}
 
-	// this is more than needed
-	char *buf = static_cast<char*>(std::malloc(data_len + sizeof(ethernet_header)));
-	ethernet_header *ehdr = reinterpret_cast<ethernet_header*>(buf);
-
-        if(((mhdr->frame_control >> 2) & 3) != 2) {
+    if(((mhdr->frame_control >> 2) & 3) != 2) 
+    {
 		dout << "this is not a data frame -- ignoring" << std::endl;
 		return;
 	}
-
-	std::memcpy(ehdr->dest, mhdr->addr1, 6);
-	std::memcpy(ehdr->src, mhdr->addr2, 6);
-	ehdr->type = 0x0008;
-
 	char *frame = (char*)pmt::blob_data(msg);
 
+	// this is more than needed
+	const int SNAP_LEN = 6;
+	const int TYPE_LEN = 2;
+	const int ETHER_SFD_LEN = 4;
+	int ether_len = data_len - sizeof(mac_header) - SNAP_LEN - TYPE_LEN + sizeof(ethernet_header) + ETHER_SFD_LEN;
+	char *buf = static_cast<char*>(std::malloc(ether_len));
+	buf[0] = 0x00;
+	buf[1] = 0x00;
+	std::memcpy(buf+2, frame + sizeof(mac_header)+ sizeof(SNAP_LEN), TYPE_LEN);
+	std::memcpy(buf+ETHER_SFD_LEN+12, buf+2, TYPE_LEN);
+
+	ethernet_header *ehdr = reinterpret_cast<ethernet_header*>(buf+ETHER_SFD_LEN);
+	std::memcpy(ehdr->dest, mhdr->addr1, 6);
+	std::memcpy(ehdr->src, mhdr->addr2, 6);
+	// ehdr->type = 0x0008;
+
+
 	// DATA
-	if((((mhdr->frame_control) >> 2) & 63) == 2) {
-		memcpy(buf + sizeof(ethernet_header), frame + 32, data_len - 32);
-		pmt::pmt_t payload = pmt::make_blob(buf, data_len - 32 + 14);
+	if((((mhdr->frame_control) >> 2) & 63) == 2) 
+	{
+		memcpy(buf + sizeof(ethernet_header)+ETHER_SFD_LEN, frame + 32, data_len - 32);
+		pmt::pmt_t payload = pmt::make_blob(buf, ether_len);
 		message_port_pub(pmt::mp("to tap"), pmt::cons(pmt::PMT_NIL, payload));
 
 	// QoS Data
@@ -92,41 +102,75 @@ ether_encap_impl::from_wifi(pmt::pmt_t msg) {
 	free(buf);
 }
 
+//以太网头部的MAC地址必须一起传输至MAC层
 void
-ether_encap_impl::from_tap(pmt::pmt_t msg) {
+ether_encap_impl::from_tap(pmt::pmt_t msg) 
+{
 	size_t len = pmt::blob_length(pmt::cdr(msg));
 	const char* data = static_cast<const char*>(pmt::blob_data(pmt::cdr(msg)));
 
+	len = len - 4;
+	data = data + 4;
+	//以太网头部前４个字节与type相同，但是不知有什么意义，数据并没有包含FCS
 	const ethernet_header *ehdr = reinterpret_cast<const ethernet_header*>(data);
-
-	switch(ehdr->type) {
-	case 0x0008: {
-		std::cout << "ether type: IP" << std::endl;
-
-		char *buf = static_cast<char*>(malloc(len + 8 - sizeof(ethernet_header)));
-		buf[0] = 0xaa;
-		buf[1] = 0xaa;
-		buf[2] = 0x03;
-		buf[3] = 0x00;
-		buf[4] = 0x00;
-		buf[5] = 0x00;
-		buf[6] = 0x08;
-		buf[7] = 0x00;
-		std::memcpy(buf + 8, data + sizeof(ethernet_header), len - sizeof(ethernet_header));
-		pmt::pmt_t blob = pmt::make_blob(buf, len + 8 - sizeof(ethernet_header));
-		message_port_pub(pmt::mp("to wifi"), pmt::cons(pmt::PMT_NIL, blob));
-		break;
+	/*std::cout << "ehdr->type : " << std::hex << ehdr->type; 
+	std::cout << "  len = " << len << std::endl;
+	for (int i = 0; i < len; ++i)
+	{
+		std::cout << std::hex << ((unsigned int)data[i] & 0xff) << " ";
 	}
-	case 0x0608:
-		std::cout << "ether type: ARP " << std::endl;
-		break;
-	default:
-		std::cout << "unknown ether type" << std::endl;
-		break;
+	std::cout << std::endl;
+	print_mac_address(ehdr->dest, true);
+	print_mac_address(ehdr->src, true);*/
+
+	switch(ehdr->type) 
+	{
+		
+		case 0x0008: 
+		{
+			std::cout << "ether type: IP" << std::endl;
+
+			char *buf = static_cast<char*>(malloc(len + 6));
+			LLC_encap(data,len,buf);
+			pmt::pmt_t blob = pmt::make_blob(buf, len + 6);
+			message_port_pub(pmt::mp("to wifi"), pmt::cons(pmt::PMT_NIL, blob));
+			break;
+		}
+		case 0x0608:
+		{
+			std::cout << "ether type: ARP " << std::endl;
+			char *buf = static_cast<char*>(malloc(len + 6));
+			LLC_encap(data,len,buf);
+			pmt::pmt_t blob = pmt::make_blob(buf, len + 6);
+			message_port_pub(pmt::mp("to wifi"), pmt::cons(pmt::PMT_NIL, blob));
+			break;
+		}
+		default:
+		{
+			std::cout << "unknown ether type" << std::endl;
+			break;
+		}
 	}
 
 }
-
+/**
+ * ether : < DST MAC | SRC MAC | type | IP | FCS >
+ * LLC : < DST MAC | SRC MAC | SNAP/DSAP | SNAP/SSAP | Control | RFC || Type | IP | FCS >
+ * FCS 重新计算
+ */
+void ether_encap_impl::LLC_encap(const char* data, int len, char*& buf)
+{
+	std::memcpy(buf,data,12);
+	buf[12] = 0xaa; //DSAP
+	buf[13] = 0xaa; //SSAP
+	buf[14] = 0x03; //control
+	buf[15] = 0x00; //RFC
+	buf[16] = 0x00;
+	buf[17] = 0x00;
+	buf[18] = 0x08; //type
+	buf[19] = 0x00;
+	std::memcpy(buf + 20, data + sizeof(ethernet_header), len - sizeof(ethernet_header));
+}
 ether_encap::sptr
 ether_encap::make(bool debug) {
 	return gnuradio::get_initial_sptr(new ether_encap_impl(debug));

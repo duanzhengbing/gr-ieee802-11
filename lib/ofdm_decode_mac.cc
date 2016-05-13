@@ -207,7 +207,7 @@ void deinterleave() {
 	int n_cbps = d_ofdm.n_cbps;
 	int first[n_cbps];
 	int second[n_cbps];
-	int s = std::max(d_ofdm.n_bpsc / 2, 1);
+	int s = std::max(d_ofdm.n_bpsc >> 1, 1);
 
 	for(int j = 0; j < n_cbps; j++) {
 		first[j] = s * (j / s) + ((j + int(floor(16.0 * j / n_cbps))) % s);
@@ -282,7 +282,7 @@ void descramble () {
 
 	for(int i = 0; i < decoded_bits.size(); i++) {
 		int bit = i % 8;
-		int byte = i / 8;
+		int byte = i >> 3;
 		if(bit == 0) {
 			out_bytes[byte] = 0;
 		}

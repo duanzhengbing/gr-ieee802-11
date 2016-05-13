@@ -18,17 +18,20 @@
 #define INCLUDED_IEEE802_11_ETHER_ENCAP_IMPL_H
 
 #include <ieee802-11/ether_encap.h>
+#include <ieee802-11/common.h>
 
 namespace gr {
 namespace ieee802_11 {
 
-	struct ethernet_header {
+	struct ethernet_header 
+	{
 		uint8_t   dest[6];
 		uint8_t   src[6];
 		uint16_t  type;
 	}__attribute__((packed));
 
-	class ether_encap_impl : public ether_encap {
+	class ether_encap_impl : public ether_encap 
+	{
 
 		public:
 			ether_encap_impl(bool debug);
@@ -36,6 +39,7 @@ namespace ieee802_11 {
 		private:
 			void from_tap(pmt::pmt_t msg);
 			void from_wifi(pmt::pmt_t msg);
+			void LLC_encap(const char* data, int len, char*& buf);
 
 			bool d_debug;
 			uint16_t d_last_seq;

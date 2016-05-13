@@ -28,6 +28,7 @@
 #include <endian.h>
 #endif
 
+#include "ofdm_mac.h"
 #include <boost/crc.hpp>
 #include <iostream>
 #include <stdexcept>
@@ -35,11 +36,10 @@
 
 using namespace gr::ieee802_11;
 
-class ofdm_mac_impl : public ofdm_mac {
+namespace gr{
+	namespace ieee802_11{
 
-public:
-
-ofdm_mac_impl(std::vector<uint8_t> src_mac, std::vector<uint8_t> dst_mac, std::vector<uint8_t> bss_mac) :
+ofdm_mac_impl::ofdm_mac_impl(std::vector<uint8_t> src_mac, std::vector<uint8_t> dst_mac, std::vector<uint8_t> bss_mac) :
 		block("ofdm_mac",
 			gr::io_signature::make(0, 0, 0),
 			gr::io_signature::make(0, 0, 0)),
@@ -65,7 +65,8 @@ ofdm_mac_impl(std::vector<uint8_t> src_mac, std::vector<uint8_t> dst_mac, std::v
 	}
 }
 
-void phy_in (pmt::pmt_t msg) {
+void ofdm_mac_impl::phy_in (pmt::pmt_t msg) 
+{
 	// this must be a pair
 	if (!pmt::is_blob(pmt::cdr(msg)))
 		throw std::runtime_error("PMT must be blob");
@@ -80,8 +81,8 @@ void phy_in (pmt::pmt_t msg) {
 	message_port_pub(pmt::mp("app out"), pmt::cons(pmt::car(msg), msdu));
 }
 
-void app_in (pmt::pmt_t msg) {
-
+void ofdm_mac_impl::app_in (pmt::pmt_t msg) 
+{
 	size_t       msg_len;
 	const char   *msdu;
 	std::string  str;
@@ -108,9 +109,17 @@ void app_in (pmt::pmt_t msg) {
 	{
 		msg_len = pmt::blob_length(pmt::cdr(msg));
 		msdu = reinterpret_cast<const char *>(pmt::blob_data(pmt::cdr(msg)));
+		// std::cout << "TUNTAP PDU length = " << msg_len << std::endl;
 		if(msg_len > 1500)
 			throw std::invalid_argument("Frame too large (> 1500)");
-		send_data_frame(msdu,msg_len);
+
+		for(int i = 0; i < 6; i++) 
+		{
+			d_dst_mac[i] = msdu[i];
+			d_src_mac[i] = msdu[6+i];
+		}
+
+		send_data_frame(msdu+12,msg_len-12);
 	}
 	else
 	{
@@ -118,11 +127,11 @@ void app_in (pmt::pmt_t msg) {
                 return;
 	}
 }
-void send_data_frame(const char *msdu, int msdu_size)
+void ofdm_mac_impl::send_data_frame(const char *msdu, int msdu_size)
 {
 	// make MAC frame
 	int    psdu_length;
-	generate_mac_data_frame(msdu, msdu_size, psdu_length);
+	gen_mac_data_frame(msdu, msdu_size, psdu_length);
 
 	// dict
 	pmt::pmt_t dict = pmt::make_dict();
@@ -134,12 +143,13 @@ void send_data_frame(const char *msdu, int msdu_size)
 	// pdu
 	message_port_pub(pmt::mp("phy out"), pmt::cons(dict, mac));
 }
+
 /**
  * |--------------------|---------|------|------|--|---|--------|
  * |<---MAC head(24)--->|<-时间戳->|信标间隔| 容量 |id|len|<-ssid->|
  * 		24字节				8字节	2字节   2字节  1   1   0-32
  */
-void send_beacon_frame()
+void ofdm_mac_impl::send_beacon_frame()
 {
 	int psdu_length;
 	size_t       infor_unit_size = 22;
@@ -152,7 +162,7 @@ void send_beacon_frame()
 	std::memcpy(infor_unit+13,&length,1);
 	std::memcpy(infor_unit+14,ssid,7);
 
-	generate_mac_management_frame(infor_unit,infor_unit_size,psdu_length);
+	gen_mac_management_frame(infor_unit,infor_unit_size,psdu_length);
 	// dict
 	pmt::pmt_t dict = pmt::make_dict();
 	dict = pmt::dict_add(dict, pmt::mp("crc_included"), pmt::PMT_T);
@@ -163,7 +173,7 @@ void send_beacon_frame()
 	// pdu
 	message_port_pub(pmt::mp("phy out"), pmt::cons(dict, mac));
 }
-void generate_mac_management_frame(const char *msdu, int msdu_size, int& psdu_size)
+void ofdm_mac_impl::gen_mac_management_frame(const char *msdu, int msdu_size, int& psdu_size)
 {
 	mac_header header;
 	header.frame_control = 0x0080;
@@ -199,8 +209,8 @@ void generate_mac_management_frame(const char *msdu, int msdu_size, int& psdu_si
 	memcpy(d_psdu + msdu_size + 24, &fcs, sizeof(uint32_t));
 }
 
-void generate_mac_data_frame(const char *msdu, int msdu_size, int& psdu_size) {
-
+void ofdm_mac_impl::gen_mac_data_frame(const char *msdu, int msdu_size, int& psdu_size) 
+{
 	// mac header
 	mac_header header;
 	header.frame_control = 0x0008;
@@ -236,20 +246,16 @@ void generate_mac_data_frame(const char *msdu, int msdu_size, int& psdu_size) {
 	memcpy(d_psdu + msdu_size + 24, &fcs, sizeof(uint32_t));
 }
 
-bool check_mac(std::vector<uint8_t> mac) {
+bool ofdm_mac_impl::check_mac(std::vector<uint8_t> mac) {
 	if(mac.size() != 6) return false;
 	return true;
 }
 
-private:
-	uint16_t d_seq_nr;
-	uint8_t d_src_mac[6];
-	uint8_t d_dst_mac[6];
-	uint8_t d_bss_mac[6];
-	uint8_t d_psdu[1528];
-};
 
 ofdm_mac::sptr
 ofdm_mac::make(std::vector<uint8_t> src_mac, std::vector<uint8_t> dst_mac, std::vector<uint8_t> bss_mac) {
 	return gnuradio::get_initial_sptr(new ofdm_mac_impl(src_mac, dst_mac, bss_mac));
 }
+
+}//ieee802_11
+}//gr

@@ -62,10 +62,13 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 		// new WiFi frame
 		if(tags.size()) {
 			d_nsym = 0;
+			dout << "i = "<< i << " o = "<< o << " d_nsym = 0 new frame " << std::endl;
 		}
-
+		/*开始的两个OFDM符号是长训练序列，用于信道估计和频偏估计*/
 		// first data symbol (= signal field)
-		if(d_nsym == 2) {
+		if(d_nsym == 2) 
+		{
+			dout << "i = "<< i << " o = "<< o << " d_nsym = 2 first data symbol" << std::endl;
 			add_item_tag(0, nitems_written(0) + o,
 				pmt::string_to_symbol("ofdm_start"),
 				pmt::PMT_T,
@@ -82,7 +85,7 @@ int general_work (int noutput_items, gr_vector_int& ninput_items,
 	}
 
 	dout << "SYMBOLS: consumed " << i << "  produced " << o << std::endl;
-
+	dout << std::endl;
 	consume(0, i);
 	return o;
 }

@@ -49,6 +49,7 @@ struct mac_header {
 	uint8_t addr3[6];
 	uint16_t seq_nr;
 }__attribute__((packed));
+
 struct ssid_unit
 {
 	uint8_t unit_id;
